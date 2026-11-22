@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SURIT STUDIO</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#eee;background:#101114}
+*{box-sizing:border-box}body{margin:0;min-width:760px}
+button,input,select{font:inherit}button,select{color:#eee;background:#25272d;border:1px solid #3b3d45;border-radius:6px;padding:8px;cursor:pointer}
+button:hover{background:#34363e}button:disabled{opacity:.55;cursor:wait}
+.primary{background:#e8bc48;color:#171717;border-color:#e8bc48;font-weight:bold}
+header{height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#17181c;border-bottom:1px solid #303139}
+.brand{font-weight:bold;letter-spacing:2px}.brand b{color:#e8bc48}
+.actions{display:flex;align-items:center;gap:7px}
+main{height:calc(100vh - 62px);min-height:680px;padding:11px;display:grid;grid-template-columns:220px minmax(280px,1fr) 240px;grid-template-rows:minmax(300px,1fr) 205px;gap:10px}
+.panel{background:#18191e;border:1px solid #2e3037;border-radius:9px;padding:13px;min-width:0;overflow:auto}
+h2{font-size:14px;margin:0 0 13px}h3{font-size:11px;color:#bbb;margin:15px 0 8px}
+label{display:block;font-size:11px;color:#bfc0c7;margin:8px 0}
+input[type="number"],input[type="text"]{width:100%;padding:7px;background:#101114;color:#eee;border:1px solid #41434c;border-radius:5px}
+input[type="range"]{width:100%;accent-color:#e8bc48}
+select{max-width:100%}.upload{border:1px dashed #555762;border-radius:8px;padding:20px 8px;text-align:center;font-size:12px;color:#ccc;cursor:pointer}
+.upload small{display:block;color:#888;margin-top:7px}#files{display:none}
+.media-list{display:grid;gap:5px;margin-top:8px}
+.media{width:100%;font-size:11px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media.active,.clip.active{border-color:#e8bc48}
+.stage{display:flex;flex-direction:column}
+.stagebar{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;font-size:10px;color:#999}
+.preview{flex:1;min-height:0;background:#08090b;border-radius:6px;display:grid;place-items:center;overflow:hidden}
+canvas{width:100%;height:100%;object-fit:contain}
+video{position:fixed;width:1px;height:1px;left:-10px;opacity:0;pointer-events:none}
+.transport{display:flex;align-items:center;gap:7px;padding-top:9px}
+.transport input{flex:1}.clock{font:11px monospace;color:#bbb;white-space:nowrap}
+.inspector label{margin:9px 0}.row{display:flex;align-items:center;gap:8px}.row>*{flex:1}
+.hint,.empty{font-size:11px;color:#858791;line-height:1.5}
+.timeline{grid-column:1/4}
+.timeline-head{display:flex;align-items:center;gap:10px}.timeline-head h2{margin:0}
+.timeline-head .spacer{flex:1}
+.track-label{font-size:9px;letter-spacing:1px;color:#858791;margin:12px 0 5px}
+.track{height:45px;background:#111216;border-radius:5px;padding:4px;display:flex;gap:5px;overflow:auto}
+.clip{min-width:90px;flex:1;text-align:left;background:#292b32;display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden;padding:5px}
+.clip span{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip small{font-size:9px;color:#aaa}
+#status{font-size:11px;color:#e8bc48;line-height:1.4;margin-top:8px}
+.modal{position:fixed;inset:0;background:#0009;display:none;place-items:center}
+.modal.open{display:grid}.dialog{width:min(380px,90vw);padding:18px;background:#1b1c21;border:1px solid #444;border-radius:10px}
+.dialog h2{margin-bottom:15px}.dialog input{width:100%;padding:9px;background:#101114;color:white;border:1px solid #444;border-radius:5px}
+.dialog-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
+@media(max-width:900px){main{grid-template-columns:180px minmax(250px,1fr);grid-template-rows:430px 190px}.inspector{display:none}.timeline{grid-column:1/3}.actions{gap:4px}.actions button{font-size:11px;padding:7px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">SURIT <b>STUDIO</b></div>
+  <div class="actions">
+    <select id="size" title="Canvas size">
+      <option value="1920,1080">1920 × 1080</option>
+      <option value="1280,720">1280 × 720</option>
+      <option value="1080,1080">1080 × 1080</option>
+      <option value="1080,1920">1080 × 1920</option>
+      <option value="3840,2160">3840 × 2160</option>
+    </select>
+    <button id="textButton">＋ Text</button>
+    <button id="exportButton" class="primary">Export WebM</button>
+  </div>
+</header>
+
+<main>
+  <aside class="panel">
+    <h2>Media library</h2>
+    <label class="upload" for="files">＋ Import video files
+      <small>MP4, WebM, MOV (browser support varies)</small>
+    </label>
+    <input id="files" type="file" accept="video/*" multiple>
+    <h3>Clips</h3>
+    <div class="media-list" id="mediaList"></div>
+    <div id="status"></div>
+  </aside>
+
+  <section class="panel stage">
+    <div class="stagebar">
+      <span>PREVIEW</span>
+      <span id="position">00:00 / 00:00</span>
+    </div>
+    <div class="preview"><canvas id="canvas"></canvas></div>
+    <video id="video" playsinline preload="auto"></video>
+    <div class="transport">
+      <button id="toStart" title="Go to start">|◀</button>
+      <button id="play" class="primary" title="Play or pause">▶</button>
+      <button id="toEnd" title="Go to end">▶|</button>
+      <input id="scrub" type="range" min="0" max="0" value="0" step="0.05">
+      <span class="clock" id="clock">00:00 / 00:00</span>
+    </div>
+  </section>
+
+  <aside class="panel inspector">
+    <h2>Clip inspector</h2>
+    <div id="noSelection" class="empty">Select a timeline clip to edit it.</div>
+    <div id="clipControls" hidden>
+      <label>Trim start (seconds)<input id="trimStart" type="number" min="0" step=".1"></label>
+      <label>Trim end (seconds)<input id="trimEnd" type="number" min="0" step=".1"></label>
+      <label>Playback speed
+        <select id="speed">
+          <option value=".25">0.25×</option><option value=".5">0.5×</option>
+          <option value=".75">0.75×</option><option value="1">1×</option>
+          <option value="1.25">1.25×</option><option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+      </label>
+      <label>Rotation
+        <select id="rotation">
+          <option value="0">0°</option><option value="90">90°</option>
+          <option value="180">180°</option><option value="270">270°</option>
+        </select>
+      </label>
+      <label>Framing
+        <select id="framing"><option value="contain">Fit</option><option value="cover">Fill / crop</option></select>
+      </label>
+      <label>Zoom <input id="zoom" type="range" min="1" max="3" step=".01" value="1"></label>
+      <div class="row">
+        <button id="flipH">Flip H</button><button id="flipV">Flip V</button>
+      </div>
+    </div>
+    <h3>Canvas background</h3>
+    <input id="background" type="color" value="#08090b">
+    <h3>Text overlay</h3>
+    <div class="row"><input id="overlayColor" type="color" value="#ffffff"><button id="removeText">Remove text</button></div>
+    <p id="overlayLabel" class="hint">No text overlay.</p>
+  </aside>
+
+  <section class="panel timeline">
+    <div class="timeline-head">
+      <h2>Timeline</h2>
+      <span id="clipCount" class="empty">0 clips</span>
+      <span class="spacer"></span>
+      <button id="split">Split at playhead</button>
+      <button id="duplicate">Duplicate</button>
+      <button id="delete">Delete clip</button>
+      <button id="clear">Clear project</button>
+    </div>
+    <div class="track-label">VIDEO · Drag clips to reorder</div>
+    <div class="track" id="track"><span class="empty">Import clips to start.</span></div>
+    <div class="track-label">TEXT OVERLAY · Applies across the video</div>
+    <div class="track" style="height:32px"><span id="textChip" class="empty">No overlay added</span></div>
+  </section>
+</main>
+
+<div class="modal" id="modal">
+  <form class="dialog" id="textForm">
+    <h2>Add text overlay</h2>
+    <label>Text<input id="textInput" type="text" maxlength="120" value="Your text here"></label>
+    <div class="dialog-foot">
+      <button type="button" id="cancelText">Cancel</button>
+      <button class="primary">Add text</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("canvas"), ctx = canvas.getContext("2d"), video = $("video");
+  let clips = [], selected = -1, playhead = 0, playing = false, exporting = false;
+  let overlay = "", dragIndex = -1, lastFrame = 0, recorder = null, rafId = 0;
+
+  const say = (message) => $("status").textContent = message;
+  const timeText = (value) => {
+    value = Math.max(0, Math.floor(value || 0));
+    return String(Math.floor(value / 60)).padStart(2,"0") + ":" + String(value % 60).padStart(2,"0");
+  };
+  const clipLength = (clip) => Math.max(0, clip.out - clip.in) / clip.speed;
+  const totalLength = () => clips.reduce((sum, clip) => sum + clipLength(clip), 0);
+
+  function resizeCanvas() {
+    const [w,h] = $("size").value.split(",").map(Number);
+    canvas.width = w; canvas.height = h;
+  }
+  $("size").onchange = resizeCanvas;
+  resizeCanvas();
+
+  function clipAt(position) {
+    let cursor = 0;
+    for (let i=0; i<clips.length; i++) {
+      const length = clipLength(clips[i]);
+      if (position < cursor + length || i === clips.length-1) {
+        return {index:i, local:Math.max(0, position-cursor), start:cursor};
+      }
+      cursor += length;
+    }
+    return null;
+  }
+
+  function updateTimeUI() {
+    const total = totalLength();
+    $("position").textContent = `${timeText(playhead)} / ${timeText(total)}`;
+    $("clock").textContent = `${timeText(playhead)} / ${timeText(total)}`;
+    $("scrub").max = total;
+    $("scrub").value = Math.min(playhead, total);
+  }
+
+  function setClipSource(index, sourceTime) {
+    if (index < 0 || index >= clips.length) return;
+    selected = index;
+    const clip = clips[index];
+    const needsSource = video.dataset.url !== clip.url;
+    if (needsSource) {
+      video.pause();
+      video.src = clip.url;
+      video.dataset.url = clip.url;
+      video.load();
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.max(clip.in, Math.min(sourceTime, clip.out));
+        video.playbackRate = clip.speed;
+        if (playing) video.play().catch(() => {});
+      };
+    } else {
+      if (Math.abs(video.currentTime - sourceTime) > .25) video.currentTime = sourceTime;
+      video.playbackRate = clip.speed;
+      if (playing && video.paused) video.play().catch(() => {});
+    }
+    render();
+    fillInspector();
+  }
+
+  function seekGlobal(position) {
+    playhead = Math.max(0, Math.min(position, totalLength()));
+    const place = clipAt(playhead);
+    if (place) {
+      const clip = clips[place.index];
+      setClipSource(place.index, clip.in + place.local * clip.speed);
+    }
+    updateTimeUI();
+    draw();
+  }
+
+  function fillInspector() {
+    const hasClip = selected >= 0 && clips[selected];
+    $("clipControls").hidden = !hasClip;
+    $("noSelection").hidden = !!hasClip;
+    if (!hasClip) return;
+    const clip = clips[selected];
+    $("trimStart").value = clip.in.toFixed(2);
+    $("trimEnd").value = clip.out.toFixed(2);
+    $("speed").value = String(clip.speed);
+    $("rotation").value = String(clip.rotation);
+    $("framing").value = clip.framing;
+    $("zoom").value = clip.zoom;
+    $("flipH").dataset.on = clip.flipH;
+    $("flipV").dataset.on = clip.flipV;
+    $("flipH").textContent = clip.flipH ? "Flip H ✓" : "Flip H";
+    $("flipV").textContent = clip.flipV ? "Flip V ✓" : "Flip V";
+  }
+
+  function render() {
+    $("mediaList").innerHTML = "";
+    $("track").innerHTML = "";
+    $("clipCount").textContent = `${clips.length} clip${clips.length === 1 ? "" : "s"}`;
+    if (!clips.length) $("track").innerHTML = '<span class="empty">Import clips to start.</span>';
+
+    clips.forEach((clip, index) => {
+      const media = document.createElement("button");
+      media.className = "media" + (index === selected ? " active" : "");
+      media.textContent = clip.name;
+      media.title = clip.name;
+      media.onclick = () => {
+        let before = 0;
+        for (let i=0;i<index;i++) before += clipLength(clips[i]);
+        playing = false;
+        $("play").textContent = "▶";
+        seekGlobal(before);
+      };
+      $("mediaList").append(media);
+
+      const block = document.createElement("button");
+      block.className = "clip" + (index === selected ? " active" : "");
+      block.style.flexGrow = String(Math.max(.25, clipLength(clip)));
+      block.draggable = true;
+      block.innerHTML = "<span></span><small></small>";
+      block.querySelector("span").textContent = clip.name;
+      block.querySelector("small").textContent =
+        `${timeText(clipLength(clip))} · ${clip.speed}×`;
+      block.onclick = () => {
+        let before = 0;
+        for (let i=0;i<index;i++) before += clipLength(clips[i]);
+        playing = false;
+        $("play").textContent = "▶";
+        seekGlobal(before);
+      };
+      block.ondragstart = () => dragIndex = index;
+      block.ondragover = (event) => event.preventDefault();
+      block.ondrop = (event) => {
+        event.preventDefault();
+        if (dragIndex < 0 || dragIndex === index) return;
+        const [item] = clips.splice(dragIndex,1);
+        clips.splice(index,0,item);
+        dragIndex = -1;
+        selected = index;
+        render();
+        seekGlobal(0);
+      };
+      $("track").append(block);
+    });
+    $("textChip").textContent = overlay || "No overlay added";
+    updateTimeUI();
+  }
+
+  function draw() {
+    ctx.fillStyle = $("background").value;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if (video.readyState >= 2 && video.videoWidth && selected >= 0) {
+      const clip = clips[selected];
+      let w = video.videoWidth, h = video.videoHeight;
+      const sideways = clip.rotation % 180 !== 0;
+      if (sideways) [w,h] = [h,w];
+      const fitScale = clip.framing === "cover"
+        ? Math.max(canvas.width/w, canvas.height/h)
+        : Math.min(canvas.width/w, canvas.height/h);
+      const scale = fitScale * clip.zoom;
+      ctx.save();
+      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.rotate(clip.rotation * Math.PI / 180);
+      ctx.scale(scale * (clip.flipH ? -1 : 1), scale * (clip.flipV ? -1 : 1));
+      ctx.drawImage(video, -video.videoWidth/2, -video.videoHeight/2);
+      ctx.restore();
+    } else if (!clips.length) {
+      ctx.fillStyle="#888";ctx.textAlign="center";
+      ctx.font=`${Math.max(18,canvas.width*.025)}px Arial`;
+      ctx.fillText("Import a video to start editing",canvas.width/2,canvas.height/2);
+    }
+
+    if (overlay) {
+      ctx.save();
+      ctx.font=`bold ${Math.max(24,canvas.width*.045)}px Arial`;
+      ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.lineWidth=Math.max(3,canvas.width*.004);
+      ctx.strokeStyle="rgba(0,0,0,.75)";
+      ctx.fillStyle=$("overlayColor").value;
+      ctx.strokeText(overlay,canvas.width/2,canvas.height*.84);
+      ctx.fillText(overlay,canvas.width/2,canvas.height*.84);
+      ctx.restore();
+    }
+  }
+
+  function tick(now) {
+    if (playing) {
+      if (selected >= 0 && clips[selected]) {
+        const clip = clips[selected];
+        const localSource = Math.max(0, video.currentTime - clip.in);
+        let start = 0;
+        for (let i=0;i<selected;i++) start += clipLength(clips[i]);
+        playhead = start + localSource / clip.speed;
+
+        if (video.currentTime >= clip.out - .025) {
+          if (selected < clips.length - 1) {
+            const next = selected + 1;
+            const nextClip = clips[next];
+            let nextStart = 0;
+            for (let i=0;i<next;i++) nextStart += clipLength(clips[i]);
+            playhead = nextStart;
+            setClipSource(next, nextClip.in);
+            if (playing) video.play().catch(() => {});
+          } else {
+            playhead = totalLength();
+            playing = false;
+            video.pause();
+            $("play").textContent = "▶";
+            if (exporting && recorder && recorder.state !== "inactive") recorder.stop();
+            exporting = false;
+          }
+        }
+      }
+      updateTimeUI();
+    }
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+
+  $("files").onchange = async (event) => {
+    const files = Array.from(event.target.files).filter(file => file.type.startsWith("video/"));
+    for (const file of files) {
+      const url = URL.createObjectURL(file);
+      const metaVideo = document.createElement("video");
+      metaVideo.preload = "metadata";
+      metaVideo.src = url;
+      const duration = await new Promise(resolve => {
+        metaVideo.onloadedmetadata = () => resolve(metaVideo.duration || 0);
+        metaVideo.onerror = () => resolve(0);
+      });
+      if (duration > 0) clips.push({
+        name:file.name,url,duration,in:0,out:duration,speed:1,rotation:0,
+        framing:"contain",zoom:1,flipH:false,flipV:false
+      });
+      else URL.revokeObjectURL(url);
+    }
+    if (selected < 0 && clips.length) {
+      selected = 0;
+      setClipSource(0, clips[0].in);
+    }
+    render();
+    say(clips.length ? "" : "No supported video files were imported.");
+    event.target.value = "";
+  };
+
+  $("trimStart").onchange = () => {
+    if (selected < 0) return;
+    const clip = clips[selected];
+    clip.in = Math.max(0, Math.min(Number($("trimStart").value), clip.out - .05));
+    render(); seekGlobal(0);
+  };
+  $("trimEnd").onchange = () => {
+    if (selected < 0) return;
+    const clip = clips[selected];
+    clip.out = Math.min(clip.duration, Math.max(Number($("trimEnd").value), clip.in + .05));
+    render(); seekGlobal(0);
+  };
+  $("speed").onchange = () => {
+    if (selected < 0) return;
+    clips[selected].speed = Number($("speed").value);
+    render(); fillInspector();
+  };
+  $("rotation").onchange = () => {
+    if (selected >= 0) { clips[selected].rotation = Number($("rotation").value); draw(); }
+  };
+  $("framing").onchange = () => {
+    if (selected >= 0) { clips[selected].framing = $("framing").value; draw(); }
+  };
+  $("zoom").oninput = () => {
+    if (selected >= 0) { clips[selected].zoom = Number($("zoom").value); draw(); }
+  };
+  $("flipH").onclick = () => {
+    if (selected >= 0) { clips[selected].flipH = !clips[selected].flipH; fillInspector(); draw(); }
+  };
+  $("flipV").onclick = () => {
+    if (selected >= 0) { clips[selected].flipV = !clips[selected].flipV; fillInspector(); draw(); }
+  };
+  $("background").oninput = draw;
+  $("overlayColor").oninput = draw;
+
+  $("play").onclick = () => {
+    if (!clips.length) return say("Import a video first.");
+    if (playing) {
+      playing = false; video.pause(); $("play").textContent = "▶";
+    } else {
+      if (playhead >= totalLength()) seekGlobal(0);
+      const place = clipAt(playhead);
+      if (place) {
+        const clip = clips[place.index];
+        setClipSource(place.index, clip.in + place.local*clip.speed);
+        playing = true;
+        video.playbackRate = clip.speed;
+        video.play().then(() => $("play").textContent = "Ⅱ")
+          .catch(() => { playing=false; say("Could not play this video."); });
+      }
+    }
+  };
+  $("scrub").oninput = () => {
+    playing = false; video.pause(); $("play").textContent = "▶";
+    seekGlobal(Number($("scrub").value));
+  };
+  $("toStart").onclick = () => { playing=false;video.pause();$("play").textContent="▶";seekGlobal(0); };
+  $("toEnd").onclick = () => { playing=false;video.pause();$("play").textContent="▶";seekGlobal(totalLength()); };
+
+  $("split").onclick = () => {
+    if (selected < 0 || !clips[selected]) return say("Select a clip to split.");
+    const clip = clips[selected];
+    const splitTime = video.currentTime;
+    if (splitTime <= clip.in + .05 || splitTime >= clip.out - .05) return say("Move the playhead inside the selected clip before splitting.");
+    const second = {...clip, in:splitTime, name:clip.name + " (split)"};
+    clip.out = splitTime;
+    clips.splice(selected+1,0,second);
+    render(); fillInspector(); say("Clip split at playhead.");
+  };
+  $("duplicate").onclick = () => {
+    if (selected < 0) return say("Select a clip to duplicate.");
+    const copy = {...clips[selected], name:clips[selected].name + " copy"};
+    clips.splice(selected+1,0,copy); selected++;
+    render(); fillInspector(); say("Clip duplicated.");
+  };
+  $("delete").onclick = () => {
+    if (selected < 0) return;
+    const [removed] = clips.splice(selected,1);
+    if (!clips.some(clip => clip.url === removed.url)) URL.revokeObjectURL(removed.url);
+    selected = Math.min(selected,clips.length-1);
+    playing=false;video.pause();
+    if (selected >= 0) setClipSource(selected,clips[selected].in);
+    else {video.removeAttribute("src");video.dataset.url="";fillInspector();}
+    render();
+  };
+  $("clear").onclick = () => {
+    playing=false;video.pause();
+    for (const clip of clips) URL.revokeObjectURL(clip.url);
+    clips=[];selected=-1;playhead=0;
+    video.removeAttribute("src");video.dataset.url="";
+    overlay="";$("overlayLabel").textContent="No text overlay.";
+    fillInspector();render();say("");
+  };
+
+  $("textButton").onclick = () => $("modal").classList.add("open");
+  $("cancelText").onclick = () => $("modal").classList.remove("open");
+  $("textForm").onsubmit = (event) => {
+    event.preventDefault();
+    overlay=$("textInput").value.trim();
+    $("overlayLabel").textContent=overlay || "No text overlay.";
+    $("modal").classList.remove("open");render();draw();
+  };
+  $("removeText").onclick = () => {
+    overlay="";$("overlayLabel").textContent="No text overlay.";render();draw();
+  };
+
+  $("exportButton").onclick = () => {
+    if (!clips.length) return say("Import a video before exporting.");
+    if (!canvas.captureStream || !window.MediaRecorder) return say("Canvas recording is unsupported in this browser.");
+    const mime = ["video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm"]
+      .find(type => MediaRecorder.isTypeSupported(type));
+    if (!mime) return say("This browser does not support WebM export.");
+
+    const stream = canvas.captureStream(30), chunks=[];
+    recorder = new MediaRecorder(stream,{mimeType:mime});
+    recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+    recorder.onerror = () => {
+      exporting=false;playing=false;
+      stream.getTracks().forEach(track=>track.stop());
+      say("Export failed.");
+    };
+    recorder.onstop = () => {
+      const url=URL.createObjectURL(new Blob(chunks,{type:mime}));
+      const link=document.createElement("a");
+      link.href=url;link.download="surit-studio.webm";link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      stream.getTracks().forEach(track=>track.stop());
+      exporting=false;playing=false;$("play").textContent="▶";
+      say("WebM export downloaded.");
+    };
+    exporting=true;playing=false;video.pause();$("play").textContent="▶";
+    recorder.start();
+    seekGlobal(0);
+    const first=clips[0];
+    setClipSource(0,first.in);
+    video.onseeked = () => {
+      video.onseeked=null;playing=true;
+      video.playbackRate=first.speed;
+      video.play().then(()=>{$("play").textContent="Ⅱ";say("Exporting the full video timeline…");})
+        .catch(()=>{playing=false;exporting=false;recorder.stop();say("Could not start video for export.");});
+    };
+  };
+
+  render();fillInspector();
+})();
+</script>
+</body>
+</html>
